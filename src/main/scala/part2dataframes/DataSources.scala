@@ -1,7 +1,7 @@
 package part2dataframes
 
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.apache.spark.sql.types.{DoubleType, LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DateType, DoubleType, LongType, StringType, StructField, StructType}
 
 object DataSources extends App {
 
@@ -18,7 +18,7 @@ object DataSources extends App {
     StructField("Horsepower", LongType),
     StructField("Weight_in_lbs", LongType),
     StructField("Acceleration", DoubleType),
-    StructField("Year", StringType),
+    StructField("Year", DateType),
     StructField("Origin", StringType)
   ))
 
@@ -57,4 +57,94 @@ object DataSources extends App {
     .format("json")
     .mode(SaveMode.Overwrite)
     .save("src/main/resources/data/cars_dupe.json")
+
+  // JSON flags
+  spark.read
+//    .format("json")
+    .schema(carsSchema)
+    .option("dateFormat", "YYYY-MM-dd") // couple with schema; if Spark fails parsing, it will put null
+    .option("allowSingleQuotes", "true")
+    .option("compression", "uncompressed") // bzip2, gzip, lz4 (format for 7-zip), snappy, deflate
+//    .load("src/main/resources/data/cars.json")
+    .json("src/main/resources/data/cars.json")
+
+  // CSV flags
+  val stocksSchema = StructType(Array(
+    StructField("symbol", StringType),
+    StructField("date", DateType),
+    StructField("price", DoubleType),
+  ))
+
+  spark.read
+//    .format("csv")
+    .schema(stocksSchema)
+    .option("dateFormat", "MMM dd YYYY")
+    .option("header", "true")
+    .option("sep", ",")
+    .option("nullValue", "")
+//    .load("src/main/resources/data/stock.csv")
+    .csv("src/main/resources/data/stocks.csv")
+
+  // Parquet
+  carsDF.write
+    .mode(SaveMode.Overwrite)
+    .save("src/main/resources/data/cars.parquet") // parquet is the default format to save, so there is no need to specify the format
+
+  // Text files
+  spark.read
+    .text("src/main/resources/data/sampleTextFile.txt")
+//    .show()
+
+  // Reading from a remote DB
+  val driver = "org.postgresql.Driver"
+  val url = "jdbc:postgresql://localhost:5432/rtjvm"
+  val username = "docker"
+  val password = "docker"
+
+  val employeesDF = spark.read
+    .format("jdbc")
+    .option("driver", driver)
+    .option("url", url)
+    .option("user", username)
+    .option("password", password)
+    .option("dbtable", "public.employees")
+    .load()
+
+
+  /*
+    Exercise: read the movies DF, then write it as
+    - tab-separated values files
+    - snappy Parquet
+    - table "public.movies" in the Postgres DB
+   */
+
+  val moviesDF = spark.read
+//    .option("inferSchema", "true") // by default it is false, but for the purpose of the exercise we don't need it
+    .json("src/main/resources/data/movies.json")
+
+
+  // TSV
+  moviesDF.write
+    .mode(SaveMode.Overwrite)
+    .option("header", "true")
+    .option("sep", "\t")
+    .csv("src/main/resources/data/movies.tsv")
+
+  // Parquet
+  moviesDF.write
+    .mode(SaveMode.Overwrite)
+//    .option("compression", "snappy") // snappy by default
+    .save("src/main/resources/data/movies.parquet")
+
+  //save to DF
+  moviesDF.write
+    .format("jdbc")
+    .option("driver", driver)
+    .option("url", url)
+    .option("user", username)
+    .option("password", password)
+    .option("dbtable", "public.movies")
+    .save()
+
 }
+
